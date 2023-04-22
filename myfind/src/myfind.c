@@ -9,6 +9,8 @@
 #include <stdbool.h>
 #include <sys/types.h>
 #include <pwd.h>
+#include <unistd.h>
+#include <time.h>
 
 //defines
 #define TESTS_COUNT 3
@@ -93,11 +95,6 @@ dummy_token_fill(struct token *t_ptr, struct stat *s_ptr, int argi, char* args[]
 }
 
 static bool
-fill_action(struct token *token_ptr, struct stat *stat_ptr, int argi, char* args[], int *index){
-    return true;
-}
-
-static bool
 fill_user_token(struct token *token_ptr, struct stat *stat_ptr, int argi, char* args[], int *index){
     //check if arg is uid_t;
     char end_char = 0;
@@ -129,8 +126,78 @@ fill_user_token(struct token *token_ptr, struct stat *stat_ptr, int argi, char* 
 
 static bool
 token_print_func(struct token *token_ptr, struct stat *stat_ptr, const char *pathname){
-    printf("%s\n", pathname);
-    return true;
+    return pathname != NULL && printf("%s\n", pathname);
+}
+
+//https://stackoverflow.com/questions/10323060/printing-file-permissions-like-ls-l-using-stat2-in-c
+static int 
+filetypeletter(int mode)
+{
+    char c;
+
+    if (S_ISREG(mode))
+        c = '-';
+    else if (S_ISDIR(mode))
+        c = 'd';
+    else if (S_ISBLK(mode))
+        c = 'b';
+    else if (S_ISCHR(mode))
+        c = 'c';
+#ifdef S_ISFIFO
+    else if (S_ISFIFO(mode))
+        c = 'p';
+#endif  /* S_ISFIFO */
+#ifdef S_ISLNK
+    else if (S_ISLNK(mode))
+        c = 'l';
+#endif  /* S_ISLNK */
+#ifdef S_ISSOCK
+    else if (S_ISSOCK(mode))
+        c = 's';
+#endif  /* S_ISSOCK */
+#ifdef S_ISDOOR
+    /* Solaris 2.6, etc. */
+    else if (S_ISDOOR(mode))
+        c = 'D';
+#endif  /* S_ISDOOR */
+    else
+    {
+        /* Unknown type -- possibly a regular file? */
+        c = '?';
+    }
+    return(c);
+}
+
+static bool
+token_ls_func(struct token *token_ptr, struct stat *stat_ptr, const char *pathname){
+    if(stat_ptr == NULL){
+        return false;
+    }
+    
+    printf("%9d %6d ", stat_ptr->st_ino, stat_ptr->st_blocks);
+    printf( (S_ISDIR(stat_ptr->st_mode)) ? "d" : "-");
+    printf( (stat_ptr->st_mode & S_IRUSR) ? "r" : "-");
+    printf( (stat_ptr->st_mode & S_IWUSR) ? "w" : "-");
+    printf( (stat_ptr->st_mode & S_IXUSR) ? "x" : "-");
+    printf( (stat_ptr->st_mode & S_IRGRP) ? "r" : "-");
+    printf( (stat_ptr->st_mode & S_IWGRP) ? "w" : "-");
+    printf( (stat_ptr->st_mode & S_IXGRP) ? "x" : "-");
+    printf( (stat_ptr->st_mode & S_IROTH) ? "r" : "-");
+    printf( (stat_ptr->st_mode & S_IWOTH) ? "w" : "-");
+    printf( (stat_ptr->st_mode & S_IXOTH) ? "x" : "-");
+    printf("  %3d ", stat_ptr->st_nlink);
+
+    struct passwd *pw = NULL;
+    printf("%s  ", (pw = getpwuid(stat_ptr->st_uid)) != NULL ? pw->pw_name : "");
+    printf("%s ", (pw = getpwuid(stat_ptr->st_gid)) != NULL ? pw->pw_name : "");
+
+    printf("%9d ", stat_ptr->st_size);
+    char buff[100];
+    strftime(buff, 100, "%b %d %H:%M", localtime(&(stat_ptr->st_mtime)));
+    printf(buff);
+    printf(" %s", pathname);
+
+    printf("\n");
 }
 
 static bool
@@ -145,7 +212,7 @@ static const struct func_mapping KNOWN_ARGS[KNOWN_ARGS_COUNT]  =
     { "-type", Type, dummy_token_func, dummy_token_fill},
     { "-user", User, dummy_token_func, fill_user_token},
     { "-print", Print, token_print_func, fill_print_token},
-    { "-ls", Ls, dummy_token_func, dummy_token_fill}
+    { "-ls", Ls, token_ls_func, dummy_token_fill}
 };
 
 static bool
@@ -208,7 +275,7 @@ execute_tokens(char *pathname, int token_count, struct token token_list[], struc
 
     for(int i = 0; i < token_count; i++){
         struct token cur_token = token_list[i];
-        if(has_valid_prerequisites(pathname, &cur_token, s, &log)){
+        if(log.isValidExpression && has_valid_prerequisites(pathname, &cur_token, s, &log)){
             bool result = cur_token.func(&(cur_token), s, pathname);
             log.isValidExpression &= result;
         } else {
@@ -223,9 +290,8 @@ static bool
 walk_tree(char *pathname, int token_count, struct token token_list[], struct stat *s, int level){
     bool result = true;
 
-    result &= execute_tokens(pathname, token_count, token_list, s);
-
     if(stat (pathname, s) == 0){
+        result &= execute_tokens(pathname, token_count, token_list, s);
 
         if(s->st_mode & __S_IFDIR){
             //https://www.geeksforgeeks.org/c-program-list-files-sub-directories-directory/
