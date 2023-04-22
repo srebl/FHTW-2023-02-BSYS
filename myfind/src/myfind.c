@@ -1,3 +1,5 @@
+//#define _GNU_SOURCE
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -14,8 +16,11 @@
 #define KNOWN_ARGS_COUNT 5
 
 //typedefs
-typedef bool (*TOKEN_FUNC)(struct token *token_ptr, struct stat *stat_ptr, const char *pathname);
-typedef bool (*FILL_TOKEN_FUNC)(struct token *token_ptr, struct stat *stat_ptr, int argi, char* args[], int *index);
+typedef struct token * token_ptr;
+typedef struct stat * stat_ptr;
+
+typedef bool (*TOKEN_FUNC)(token_ptr token_ptr, stat_ptr s_ptr, const char *pathname);
+typedef bool (*FILL_TOKEN_FUNC)(token_ptr token_ptr,  stat_ptr s_ptr, int argi, char* args[], int *index);
 
 //structs
 enum token_type 
@@ -23,17 +28,30 @@ enum token_type
     Default,
     Action, 
     Test,
-    User
+    Name,
+    Type,
+    User,
+    Print,
+    Ls
 };
 
 union token_args
 {
-    char *str //-name, 
+    char *str; //-name, 
+};
+
+struct token_prerequisites{
+    bool HasValidExpression;
+};
+
+struct token_log{
+    bool isValidExpression;
 };
 
 struct token
 {
     enum token_type type;
+    struct token_prerequisites prerequisites;
     TOKEN_FUNC func;
     union token_args args; 
 };
@@ -45,14 +63,31 @@ struct func_mapping{
     FILL_TOKEN_FUNC fill_func;
 };
 
+
+static struct token_log
+create_token_log(){
+    struct token_log out = {
+        .isValidExpression = true
+    };
+    return out;
+}
+
+static struct token_prerequisites
+create_token_prerequisites(){
+    struct token_prerequisites out = {
+        .HasValidExpression = false
+    };
+    return out;
+}
+
 static bool 
-dummy_token_func(struct token *token_ptr, struct stat *stat_ptr, const char *pathname){
+dummy_token_func(struct token *t_ptr, struct stat *s_ptr, const char *pathname){
     printf("dummy_token_func\n");
     return true;
 }
 
 static bool
-dummy_token_fill(struct token *token_ptr, struct stat *stat_ptr, int argi, char* args[], int *index){
+dummy_token_fill(struct token *t_ptr, struct stat *s_ptr, int argi, char* args[], int *index){
     printf("dummy_token_fill\n");
     return true;
 }
@@ -86,17 +121,31 @@ fill_user_token(struct token *token_ptr, struct stat *stat_ptr, int argi, char* 
         password = getpwuid(uid);
     }
 
+    token_ptr->prerequisites = create_token_prerequisites();
+
     (*index)++;
     return password != NULL;
 }
 
+static bool
+token_print_func(struct token *token_ptr, struct stat *stat_ptr, const char *pathname){
+    printf("%s\n", pathname);
+    return true;
+}
+
+static bool
+fill_print_token(struct token *token_ptr, struct stat *stat_ptr, int argi, char* args[], int *index){
+    token_ptr->prerequisites = create_token_prerequisites();
+    return true;
+}
+
 static const struct func_mapping KNOWN_ARGS[KNOWN_ARGS_COUNT]  = 
 {
-    { "-name", Test, dummy_token_func, dummy_token_fill},
-    { "-type", Test, dummy_token_func, dummy_token_fill},
+    { "-name", Name, dummy_token_func, dummy_token_fill},
+    { "-type", Type, dummy_token_func, dummy_token_fill},
     { "-user", User, dummy_token_func, fill_user_token},
-    { "-print", Action, dummy_token_func, dummy_token_fill},
-    { "-ls", Action, dummy_token_func, dummy_token_fill}
+    { "-print", Print, token_print_func, fill_print_token},
+    { "-ls", Ls, dummy_token_func, dummy_token_fill}
 };
 
 static bool
@@ -140,21 +189,44 @@ is_dir_or_file(struct stat *s){
 }
 
 static bool
-execute_tokens(char *pathname, int token_count, struct token token_list[], struct stat *s){
-    bool result = true;
-
-    for(int i = 0; i < token_count; i++){
-        result &= token_list[i].func(&token_list[i], s, pathname);
+has_valid_prerequisites(char *pathname, struct token *t, struct stat *s, struct token_log *l){
+    if
+    (
+        t->prerequisites.HasValidExpression
+        && !l->isValidExpression
+    )
+    {
+        return false;
     }
 
-    return result;
+    return true;
 }
 
 static bool
-walk_tree(char *pathname, int token_count, struct token token_list[], struct stat *s){
+execute_tokens(char *pathname, int token_count, struct token token_list[], struct stat *s){
+    struct token_log log = create_token_log();
+
+    for(int i = 0; i < token_count; i++){
+        struct token cur_token = token_list[i];
+        if(has_valid_prerequisites(pathname, &cur_token, s, &log)){
+            bool result = cur_token.func(&(cur_token), s, pathname);
+            log.isValidExpression &= result;
+        } else {
+            log.isValidExpression = false;
+        }
+    }
+
+    return log.isValidExpression;
+}
+
+static bool
+walk_tree(char *pathname, int token_count, struct token token_list[], struct stat *s, int level){
     bool result = true;
 
-    if(stat (pathname, &s) == 0){
+    result &= execute_tokens(pathname, token_count, token_list, s);
+
+    if(stat (pathname, s) == 0){
+
         if(s->st_mode & __S_IFDIR){
             //https://www.geeksforgeeks.org/c-program-list-files-sub-directories-directory/
             struct dirent *de;  // Pointer for directory entry
@@ -165,24 +237,29 @@ walk_tree(char *pathname, int token_count, struct token token_list[], struct sta
             if (dr == NULL)  // opendir returns NULL if couldn't open directory
             {
                 printf("Could not open directory %s\n", pathname );
-                return false;
+                result = false;
             }
         
             // Refer http://pubs.opengroup.org/onlinepubs/7990989775/xsh/readdir.html
             // for readdir()
             while ((de = readdir(dr)) != NULL){
-                if(stat (pathname, &s) == 0){
-                    if((s->st_mode & __S_IFDIR)){
-                        result &= walk_tree(de->d_name, token_count, token_list, s);
-                    } else if(s->st_mode & __S_IFREG){
-                        result &= execute_tokens(de->d_name, token_count, token_list, s);
-                    }
+                if
+                (
+                    strcmp(de->d_name, ".") != 0 
+                    && strcmp(de->d_name, "..") != 0
+                )
+                {
+                    size_t index = 0;
+                    size_t strlength = strlen(pathname) + strlen(de->d_name) + 2;
+                    char path[strlength];
+                    strcpy(path, pathname);
+                    strcat(path, "/");
+                    strcat(path, de->d_name);
+                    result &= walk_tree(path, token_count, token_list, s, level+1);
                 }
             }
         
             closedir(dr); 
-        } else if(s->st_mode & __S_IFREG){
-            result &= execute_tokens(pathname, token_count, token_list, s);
         }
     }
     else{
@@ -201,6 +278,16 @@ print_help(){
     printf("TESTS: -name <pattern>, -type <t>, -user <name|id>.\nTests are always followed by a single argument.\n\n");
 }
 
+char *
+clean_filename(char *filename){
+    size_t lenght = strlen(filename);
+    if (filename[lenght-1] == '/'){
+        filename[lenght-1] = '\0';
+    }
+
+    return filename;
+}
+
 int 
 main (int argc, char* args[])
 {
@@ -212,15 +299,15 @@ main (int argc, char* args[])
     }
 
     bool is_path = false;
-    char *start_point = NULL;
+    char *start_point = ".";
 
     if(!is_known_command(1, args)){
         //TODO: check if arg is file or dict.
         if(stat (args[1], &s) == 0){
             if (is_dir_or_file(&s))
             {
+                start_point = clean_filename(args[1]);
                 is_path = true;
-                start_point = args[1];
             }
             else {
                 printf("start point must be a directory or a file.\n");
@@ -236,18 +323,40 @@ main (int argc, char* args[])
     }
 
     int token_list_length = 0;
-    struct token token_list[argc-2-is_path];
+    struct token token_list[argc];
+    bool has_print_or_ls_token = false;
+    struct token *cur_token = NULL;
 
     for (int i = 1+is_path, j = 0; i < argc; i++, token_list_length++){
-        struct token cur_token = token_list[token_list_length];
-        if(!parse_command(&i, argc, args, &s, &cur_token)){
+        cur_token = &(token_list[token_list_length]);
+        if(!parse_command(&i, argc, args, &s, cur_token)){
             printf("ERROR parsing arguments\n");
             print_help();
             return EXIT_FAILURE;
         }
+
+        has_print_or_ls_token = has_print_or_ls_token || cur_token->type == Print || cur_token->type == Ls;
     }
 
-    walk_tree(start_point, token_list_length, token_list, &s);
+    if(!has_print_or_ls_token){
+        cur_token = &(token_list[token_list_length]);
+        for (int i = 0; i < KNOWN_ARGS_COUNT; i++)
+        {
+            if(KNOWN_ARGS[i].type == Print){
+                if(!create_token(&i, i, argc, args, &s, cur_token)){
+                    printf("ERROR parsing arguments\n");
+                    print_help();
+                    return EXIT_FAILURE;
+                } else {
+                    cur_token->prerequisites.HasValidExpression = true;
+                    break;
+                }
+            }
+        }   
+        token_list_length++;    
+    }
+
+    walk_tree(start_point, token_list_length, token_list, &s, 0);
 
     return EXIT_SUCCESS;
 }
