@@ -1,5 +1,11 @@
+#pragma region defines
+
+#define KNOWN_ARGS_COUNT 5
 #define _GNU_SOURCE
 
+#pragma endregion
+
+#pragma region includes
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -13,18 +19,18 @@
 #include <time.h>
 #include <fnmatch.h>
 
-//defines
-#define TESTS_COUNT 3
-#define ACTIONS_COUNT 2
-#define KNOWN_ARGS_COUNT 5
+#pragma endregion
 
-//typedefs
+#pragma region typedefs
 typedef struct token * token_ptr;
 typedef struct stat * stat_ptr;
 
 typedef bool (*TOKEN_FUNC)(token_ptr token_ptr, stat_ptr s_ptr, const char *pathname);
 typedef bool (*FILL_TOKEN_FUNC)(token_ptr token_ptr,  stat_ptr s_ptr, int argc, char* args[], int *index);
 
+#pragma endregion
+
+#pragma region structs
 //structs
 enum token_type 
 { 
@@ -68,6 +74,112 @@ struct func_mapping{
     FILL_TOKEN_FUNC fill_func;
 };
 
+#pragma endregion
+
+#pragma region helper methods
+
+//https://stackoverflow.com/questions/10323060/printing-file-permissions-like-ls-l-using-stat2-in-c
+static char 
+filetypeletter_ls(mode_t mode)
+{
+    char c;
+
+    if (S_ISREG(mode))
+        c = '-';
+    else if (S_ISDIR(mode))
+        c = 'd';
+    else if (S_ISBLK(mode))
+        c = 'b';
+    else if (S_ISCHR(mode))
+        c = 'c';
+#ifdef S_ISFIFO
+    else if (S_ISFIFO(mode))
+        c = 'p';
+#endif  /* S_ISFIFO */
+#ifdef S_ISLNK
+    else if (S_ISLNK(mode))
+        c = 'l';
+#endif  /* S_ISLNK */
+#ifdef S_ISSOCK
+    else if (S_ISSOCK(mode))
+        c = 's';
+#endif  /* S_ISSOCK */
+#ifdef S_ISDOOR
+    /* Solaris 2.6, etc. */
+    else if (S_ISDOOR(mode))
+        c = 'D';
+#endif  /* S_ISDOOR */
+    else
+    {
+        /* Unknown type -- possibly a regular file? */
+        c = '?';
+    }
+    return(c);
+}
+
+//https://stackoverflow.com/questions/10323060/printing-file-permissions-like-ls-l-using-stat2-in-c
+static char 
+filetypeletter_type(mode_t mode)
+{
+    char c;
+
+    if (S_ISREG(mode))
+        c = 'f';
+    else if (S_ISDIR(mode))
+        c = 'd';
+    else if (S_ISBLK(mode))
+        c = 'b';
+    else if (S_ISCHR(mode))
+        c = 'c';
+#ifdef S_ISFIFO
+    else if (S_ISFIFO(mode))
+        c = 'p';
+#endif  /* S_ISFIFO */
+#ifdef S_ISLNK
+    else if (S_ISLNK(mode))
+        c = 'l';
+#endif  /* S_ISLNK */
+#ifdef S_ISSOCK
+    else if (S_ISSOCK(mode))
+        c = 's';
+#endif  /* S_ISSOCK */
+#ifdef S_ISDOOR
+    /* Solaris 2.6, etc. */
+    else if (S_ISDOOR(mode))
+        c = 'D';
+#endif  /* S_ISDOOR */
+    else
+    {
+        /* Unknown type -- possibly a regular file? */
+        c = '?';
+    }
+    return(c);
+}
+
+//https://stackoverflow.com/questions/10323060/printing-file-permissions-like-ls-l-using-stat2-in-c
+/* Convert a mode field into "ls -l" type perms field. */
+static char *lsperms(int mode)
+{
+    static const char *rwx[] = {"---", "--x", "-w-", "-wx",
+    "r--", "r-x", "rw-", "rwx"};
+    static char bits[11];
+
+    bits[0] = filetypeletter_ls(mode);
+    strcpy(&bits[1], rwx[(mode >> 6)& 7]);
+    strcpy(&bits[4], rwx[(mode >> 3)& 7]);
+    strcpy(&bits[7], rwx[(mode & 7)]);
+    if (mode & S_ISUID)
+        bits[3] = (mode & S_IXUSR) ? 's' : 'S';
+    if (mode & S_ISGID)
+        bits[6] = (mode & S_IXGRP) ? 's' : 'l';
+#if defined __USE_MISC || defined __USE_XOPEN
+    if (mode & S_ISVTX)
+        bits[9] = (mode & S_IXOTH) ? 't' : 'T';
+#endif
+    bits[10] = '\0';
+    return(bits);
+}
+
 static void 
 print_help(){
     printf("\nUSAGE\n\n");
@@ -84,6 +196,24 @@ print_error(char *message){
     print_help();
 }
 
+char *
+clean_filename(char *filename){
+    size_t lenght = strlen(filename);
+    if (filename[lenght-1] == '/'){
+        filename[lenght-1] = '\0';
+    }
+
+    return filename;
+}
+
+static bool
+is_dir_or_file(struct stat *s){
+    return (s->st_mode & __S_IFDIR) || (s->st_mode & __S_IFREG);
+}
+
+#pragma endregion
+
+#pragma region create helper functions
 static struct token_log
 create_token_log(){
     struct token_log out = {
@@ -100,6 +230,9 @@ create_token_prerequisites(){
     return out;
 }
 
+#pragma endregion
+
+#pragma region fill token functions
 static bool
 fill_user_token(struct token *token_ptr, struct stat *stat_ptr, int argc, char* args[], int *index){
     if
@@ -238,6 +371,10 @@ fill_type_token(struct token *token_ptr, struct stat *stat_ptr, int argc, char* 
     return true;
 }
 
+#pragma endregion
+
+#pragma region token functions
+
 static bool
 token_user_func(struct token *token_ptr, struct stat *stat_ptr, const char *pathname){
     if(token_ptr == NULL || stat_ptr == NULL){
@@ -253,106 +390,6 @@ token_print_func(struct token *token_ptr, struct stat *stat_ptr, const char *pat
     return pathname != NULL && printf("%s\n", pathname);
 }
 
-//https://stackoverflow.com/questions/10323060/printing-file-permissions-like-ls-l-using-stat2-in-c
-static char 
-filetypeletter_ls(mode_t mode)
-{
-    char c;
-
-    if (S_ISREG(mode))
-        c = '-';
-    else if (S_ISDIR(mode))
-        c = 'd';
-    else if (S_ISBLK(mode))
-        c = 'b';
-    else if (S_ISCHR(mode))
-        c = 'c';
-#ifdef S_ISFIFO
-    else if (S_ISFIFO(mode))
-        c = 'p';
-#endif  /* S_ISFIFO */
-#ifdef S_ISLNK
-    else if (S_ISLNK(mode))
-        c = 'l';
-#endif  /* S_ISLNK */
-#ifdef S_ISSOCK
-    else if (S_ISSOCK(mode))
-        c = 's';
-#endif  /* S_ISSOCK */
-#ifdef S_ISDOOR
-    /* Solaris 2.6, etc. */
-    else if (S_ISDOOR(mode))
-        c = 'D';
-#endif  /* S_ISDOOR */
-    else
-    {
-        /* Unknown type -- possibly a regular file? */
-        c = '?';
-    }
-    return(c);
-}
-
-static char 
-filetypeletter_type(mode_t mode)
-{
-    char c;
-
-    if (S_ISREG(mode))
-        c = 'f';
-    else if (S_ISDIR(mode))
-        c = 'd';
-    else if (S_ISBLK(mode))
-        c = 'b';
-    else if (S_ISCHR(mode))
-        c = 'c';
-#ifdef S_ISFIFO
-    else if (S_ISFIFO(mode))
-        c = 'p';
-#endif  /* S_ISFIFO */
-#ifdef S_ISLNK
-    else if (S_ISLNK(mode))
-        c = 'l';
-#endif  /* S_ISLNK */
-#ifdef S_ISSOCK
-    else if (S_ISSOCK(mode))
-        c = 's';
-#endif  /* S_ISSOCK */
-#ifdef S_ISDOOR
-    /* Solaris 2.6, etc. */
-    else if (S_ISDOOR(mode))
-        c = 'D';
-#endif  /* S_ISDOOR */
-    else
-    {
-        /* Unknown type -- possibly a regular file? */
-        c = '?';
-    }
-    return(c);
-}
-
-//https://stackoverflow.com/questions/10323060/printing-file-permissions-like-ls-l-using-stat2-in-c
-/* Convert a mode field into "ls -l" type perms field. */
-static char *lsperms(int mode)
-{
-    static const char *rwx[] = {"---", "--x", "-w-", "-wx",
-    "r--", "r-x", "rw-", "rwx"};
-    static char bits[11];
-
-    bits[0] = filetypeletter_ls(mode);
-    strcpy(&bits[1], rwx[(mode >> 6)& 7]);
-    strcpy(&bits[4], rwx[(mode >> 3)& 7]);
-    strcpy(&bits[7], rwx[(mode & 7)]);
-    if (mode & S_ISUID)
-        bits[3] = (mode & S_IXUSR) ? 's' : 'S';
-    if (mode & S_ISGID)
-        bits[6] = (mode & S_IXGRP) ? 's' : 'l';
-#if defined __USE_MISC || defined __USE_XOPEN
-    if (mode & S_ISVTX)
-        bits[9] = (mode & S_IXOTH) ? 't' : 'T';
-#endif
-    bits[10] = '\0';
-    return(bits);
-}
 
 static bool
 token_ls_func(struct token *token_ptr, struct stat *stat_ptr, const char *pathname){
@@ -407,6 +444,9 @@ token_type_func(struct token *token_ptr, struct stat *stat_ptr, const char *path
     return token_ptr->args.c == c;
 }
 
+#pragma endregion
+
+#pragma region constants
 
 static const struct func_mapping KNOWN_ARGS[KNOWN_ARGS_COUNT]  = 
 {
@@ -416,6 +456,26 @@ static const struct func_mapping KNOWN_ARGS[KNOWN_ARGS_COUNT]  =
     { "-print", Print, token_print_func, fill_print_token},
     { "-ls", Ls, token_ls_func, fill_ls_token}
 };
+
+#pragma endregion
+
+#pragma region helper functions
+
+static bool
+is_known_command(int index, char* args[]){
+
+    for (int i = 0; i < KNOWN_ARGS_COUNT; i++){
+        if (strcmp(KNOWN_ARGS[i].key, args[index]) == 0){
+            return true;
+        }
+    }
+
+    return false;
+}
+
+#pragma endregion
+
+#pragma region argument parsing
 
 static bool
 create_token(int *index, int i, int argc, char* args[], struct stat *stat_ptr, struct token *token){
@@ -440,22 +500,9 @@ parse_command(int *index, int argc, char* args[], struct stat *stat_ptr, struct 
     return false;
 }
 
-static bool
-is_known_command(int index, char* args[]){
+#pragma endregion
 
-    for (int i = 0; i < KNOWN_ARGS_COUNT; i++){
-        if (strcmp(KNOWN_ARGS[i].key, args[index]) == 0){
-            return true;
-        }
-    }
-
-    return false;
-}
-
-static bool
-is_dir_or_file(struct stat *s){
-    return (s->st_mode & __S_IFDIR) || (s->st_mode & __S_IFREG);
-}
+#pragma region token execution
 
 static bool
 has_valid_prerequisites(char *pathname, struct token *t, struct stat *s, struct token_log *l){
@@ -503,7 +550,6 @@ walk_tree(char *pathname, int token_count, struct token token_list[], struct sta
         
             if (dr == NULL)  // opendir returns NULL if couldn't open directory
             {
-                //printf("Could not open directory %s\n", pathname );
                 result = false;
             }
         
@@ -530,22 +576,13 @@ walk_tree(char *pathname, int token_count, struct token token_list[], struct sta
         }
     }
     else{
-        //printf("cannot get stat for %s.\n", pathname);
         return false;
     }
 
     return result;
 }
 
-char *
-clean_filename(char *filename){
-    size_t lenght = strlen(filename);
-    if (filename[lenght-1] == '/'){
-        filename[lenght-1] = '\0';
-    }
-
-    return filename;
-}
+#pragma endregion
 
 int 
 main (int argc, char* args[])
@@ -569,7 +606,11 @@ main (int argc, char* args[])
             }
         }
         else{
-            printf("myfind: unknown predicate `%s'\n", args[1]);
+            if(*args[1] == '-'){
+                printf("myfind: unknown predicate `%s'\n", args[1]);
+            } else {
+                printf("myfind: ‘%s’: No such file or directory\n", args[1]);
+            }
             return EXIT_FAILURE;
         }
     }

@@ -10,6 +10,8 @@
         "ranges": "c",
         "regex": "c",
         "utility": "c",
-        "stdbool.h": "c"
+        "stdbool.h": "c",
+        "stdlib.h": "c",
+        "dirent.h": "c"
     }
 }

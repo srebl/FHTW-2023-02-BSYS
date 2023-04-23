@@ -30,11 +30,35 @@
             ]
         },
         {
-            "name": "myfind_invalid",
+            "name": "myfind_invalid_file/dict",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/myfind/myfind",
-            "args": ["deine_mutter"],
+            "args": ["someInvalidStuff"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/myfind/test",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description":  "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "myfind_invalid_predicate",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/myfind/myfind",
+            "args": ["-someInvalidStuff"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/myfind/test",
             "environment": [],
@@ -178,7 +202,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/myfind/myfind",
-            "args": ["..", "-name", "*02*"],
+            "args": ["..", "-name", "\"*02*\""],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/myfind/test",
             "environment": [],
