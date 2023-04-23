@@ -23,7 +23,7 @@ typedef struct token * token_ptr;
 typedef struct stat * stat_ptr;
 
 typedef bool (*TOKEN_FUNC)(token_ptr token_ptr, stat_ptr s_ptr, const char *pathname);
-typedef bool (*FILL_TOKEN_FUNC)(token_ptr token_ptr,  stat_ptr s_ptr, int argi, char* args[], int *index);
+typedef bool (*FILL_TOKEN_FUNC)(token_ptr token_ptr,  stat_ptr s_ptr, int argc, char* args[], int *index);
 
 //structs
 enum token_type 
@@ -41,7 +41,8 @@ enum token_type
 union token_args
 {
     char *str; //-name, 
-    unsigned int id; //uid, gid
+    unsigned int id; //-user
+    char c; //-type
 };
 
 struct token_prerequisites{
@@ -67,6 +68,21 @@ struct func_mapping{
     FILL_TOKEN_FUNC fill_func;
 };
 
+static void 
+print_help(){
+    printf("\nUSAGE\n\n");
+    printf("myfind [path] [expression]\n\n");
+    printf("ACTIONS: -print, -ls.\nActions do not take any argumants.\n\n");
+    printf("TESTS: -name <pattern>, -type <t>, -user <name|id>.\nTests are always followed by a single argument.\n\n");
+}
+
+static void
+print_error(char *message){
+    if(message != NULL){
+        printf("%s\n");
+    }
+    print_help();
+}
 
 static struct token_log
 create_token_log(){
@@ -84,50 +100,142 @@ create_token_prerequisites(){
     return out;
 }
 
-static bool 
-dummy_token_func(struct token *t_ptr, struct stat *s_ptr, const char *pathname){
-    printf("dummy_token_func\n");
-    return true;
-}
-
 static bool
-dummy_token_fill(struct token *t_ptr, struct stat *s_ptr, int argi, char* args[], int *index){
-    printf("dummy_token_func\n");
-    return true;
-}
+fill_user_token(struct token *token_ptr, struct stat *stat_ptr, int argc, char* args[], int *index){
+    if
+    (
+        token_ptr == NULL
+        || args == NULL
+        || index == NULL
+        || *index >= argc-1
+        || args[(*index)+1] == NULL
+    )
+    {
+        return false;
+    }
+    int next_arg = (*index)+1;
 
-static bool
-fill_user_token(struct token *token_ptr, struct stat *stat_ptr, int argi, char* args[], int *index){
     //check if arg is uid_t;
     char end_char = 0;
     char *end_ptr;
-    long parsed_long = strtol(args[argi], &end_ptr, 10);
+    long parsed_long = strtol(args[(*index)+1], &end_ptr, 10);
     __uid_t uid = parsed_long;
     struct passwd *password = NULL;
 
     if //no valid int
     (
         parsed_long != uid
-        || end_ptr == args[argi] 
+        || end_ptr == args[next_arg] 
         || *end_ptr != '\0'
     )
     {
         //check for name
-        password = getpwnam(args[argi]);
+        password = getpwnam(args[next_arg]);
     }
     else //we have a valid int
     {
         password = getpwuid(uid);
     }
 
-    token_ptr->prerequisites = create_token_prerequisites();
-
-    if(password != NULL){
-        token_ptr->args.id = password->pw_uid;
+    if(password == NULL){
+        printf("myfind: ‘%s’ is not the name of a known user", args[next_arg]);
+        return false;
     }
 
+    token_ptr->prerequisites = create_token_prerequisites();
+    token_ptr->prerequisites.HasValidExpression = true;
+
+    token_ptr->args.id = password->pw_uid;
+
     (*index)++;
-    return password != NULL;
+    return true;
+}
+
+static bool
+fill_print_token(struct token *token_ptr, struct stat *stat_ptr, int argc, char* args[], int *index){
+    if (token_ptr == NULL){
+        return false;
+    }
+
+    token_ptr->prerequisites = create_token_prerequisites();
+    token_ptr->prerequisites.HasValidExpression = true;
+    return true;
+}
+
+static bool
+fill_ls_token(struct token *token_ptr, struct stat *stat_ptr, int argc, char* args[], int *index){
+    if (token_ptr == NULL){
+        return false;
+    }
+
+    token_ptr->prerequisites = create_token_prerequisites();
+    token_ptr->prerequisites.HasValidExpression = true;
+    return true;
+}
+
+static bool
+fill_name_token(struct token *token_ptr, struct stat *stat_ptr, int argc, char* args[], int *index){
+    if
+    (
+        token_ptr == NULL 
+        || index == NULL
+        || args == NULL
+        || *index >= argc-1
+        || args[(*index)+1] == NULL
+    )
+    {
+        return false;
+    }
+    int next_arg = (*index)+1;
+
+    token_ptr->prerequisites = create_token_prerequisites();
+    token_ptr->prerequisites.HasValidExpression = true;
+    token_ptr->args.str = args[next_arg];
+    (*index)++;
+    return true;
+}
+
+static bool
+fill_type_token(struct token *token_ptr, struct stat *stat_ptr, int argc, char* args[], int *index){
+    if
+    (
+        token_ptr == NULL 
+        || index == NULL
+        || args == NULL
+        || *index >= argc-1
+        || args[(*index)+1] == NULL
+    )
+    {
+        return false;
+    }
+
+    int next_arg = (*index)+1;
+
+    char *type = args[next_arg];
+    if(strlen(type) != 1){
+        return false;
+    } 
+
+    switch (*(args[next_arg]))
+    {
+    case 'b':
+    case 'c':
+    case 'd':
+    case 'p':
+    case 'f':
+    case 'l':
+    case 's':
+        token_ptr->args.c = *(args[next_arg]);
+        break;
+    default:
+        return false;
+    }
+
+    token_ptr->prerequisites = create_token_prerequisites();
+    token_ptr->prerequisites.HasValidExpression = true;
+
+    (*index)++;
+    return true;
 }
 
 static bool
@@ -146,13 +254,51 @@ token_print_func(struct token *token_ptr, struct stat *stat_ptr, const char *pat
 }
 
 //https://stackoverflow.com/questions/10323060/printing-file-permissions-like-ls-l-using-stat2-in-c
-static int 
-filetypeletter(int mode)
+static char 
+filetypeletter_ls(mode_t mode)
 {
-    char    c;
+    char c;
 
     if (S_ISREG(mode))
         c = '-';
+    else if (S_ISDIR(mode))
+        c = 'd';
+    else if (S_ISBLK(mode))
+        c = 'b';
+    else if (S_ISCHR(mode))
+        c = 'c';
+#ifdef S_ISFIFO
+    else if (S_ISFIFO(mode))
+        c = 'p';
+#endif  /* S_ISFIFO */
+#ifdef S_ISLNK
+    else if (S_ISLNK(mode))
+        c = 'l';
+#endif  /* S_ISLNK */
+#ifdef S_ISSOCK
+    else if (S_ISSOCK(mode))
+        c = 's';
+#endif  /* S_ISSOCK */
+#ifdef S_ISDOOR
+    /* Solaris 2.6, etc. */
+    else if (S_ISDOOR(mode))
+        c = 'D';
+#endif  /* S_ISDOOR */
+    else
+    {
+        /* Unknown type -- possibly a regular file? */
+        c = '?';
+    }
+    return(c);
+}
+
+static char 
+filetypeletter_type(mode_t mode)
+{
+    char c;
+
+    if (S_ISREG(mode))
+        c = 'f';
     else if (S_ISDIR(mode))
         c = 'd';
     else if (S_ISBLK(mode))
@@ -192,7 +338,7 @@ static char *lsperms(int mode)
     "r--", "r-x", "rw-", "rwx"};
     static char bits[11];
 
-    bits[0] = filetypeletter(mode);
+    bits[0] = filetypeletter_ls(mode);
     strcpy(&bits[1], rwx[(mode >> 6)& 7]);
     strcpy(&bits[4], rwx[(mode >> 3)& 7]);
     strcpy(&bits[7], rwx[(mode & 7)]);
@@ -217,7 +363,7 @@ token_ls_func(struct token *token_ptr, struct stat *stat_ptr, const char *pathna
     printf("%9d %6d ", stat_ptr->st_ino, (stat_ptr->st_blocks)/2);
     char *protection_bits = lsperms(stat_ptr->st_mode);
     printf("%s ", protection_bits);
-    printf("%5d ", stat_ptr->st_nlink);
+    printf("%3d ", stat_ptr->st_nlink);
 
     struct passwd *pw = NULL;
     printf("%s  ", (pw = getpwuid(stat_ptr->st_uid)) != NULL ? pw->pw_name : "");
@@ -233,41 +379,39 @@ token_ls_func(struct token *token_ptr, struct stat *stat_ptr, const char *pathna
     return true;
 }
 
-static bool
-fill_print_token(struct token *token_ptr, struct stat *stat_ptr, int argi, char* args[], int *index){
-    token_ptr->prerequisites = create_token_prerequisites();
-    return true;
-}
-
-static bool
-fill_ls_token(struct token *token_ptr, struct stat *stat_ptr, int argi, char* args[], int *index){
-    token_ptr->prerequisites = create_token_prerequisites();
-    return true;
-}
-
-static bool
-fill_name_token(struct token *token_ptr, struct stat *stat_ptr, int argi, char* args[], int *index){
-    token_ptr->prerequisites = create_token_prerequisites();
-    token_ptr->args.str = args[(*index)+1];
-    (*index)++;
-    return true;
-}
 
 static bool
 token_name_func(struct token *token_ptr, struct stat *stat_ptr, const char *pathname){
     if(token_ptr == NULL || pathname == NULL){
         return false;
     }
+
     char *name = basename(pathname);
     int result = fnmatch(token_ptr->args.str, name, 0);
     return !result;
 };
 
+static bool
+token_type_func(struct token *token_ptr, struct stat *stat_ptr, const char *pathname){
+    if
+    (
+        token_ptr == NULL
+        || stat_ptr == NULL
+    )
+    {
+        return false;
+    }
+
+    char c = filetypeletter_type(stat_ptr->st_mode);
+
+    return token_ptr->args.c == c;
+}
+
 
 static const struct func_mapping KNOWN_ARGS[KNOWN_ARGS_COUNT]  = 
 {
     { "-name", Name, token_name_func, fill_name_token},
-    { "-type", Type, dummy_token_func, dummy_token_fill},
+    { "-type", Type, token_type_func, fill_type_token},
     { "-user", User, token_user_func, fill_user_token},
     { "-print", Print, token_print_func, fill_print_token},
     { "-ls", Ls, token_ls_func, fill_ls_token}
@@ -281,7 +425,7 @@ create_token(int *index, int i, int argc, char* args[], struct stat *stat_ptr, s
 
     struct token out = {.type = KNOWN_ARGS[i].type, .func = KNOWN_ARGS[i].func};
     *token = out;
-    return KNOWN_ARGS[i].fill_func(token, stat_ptr, i, args, index);
+    return KNOWN_ARGS[i].fill_func(token, stat_ptr, argc, args, index);
 }
 
 static bool
@@ -333,9 +477,8 @@ execute_tokens(char *pathname, int token_count, struct token token_list[], struc
 
     for(int i = 0; i < token_count; i++){
         struct token cur_token = token_list[i];
-        if(log.isValidExpression && has_valid_prerequisites(pathname, &cur_token, s, &log)){
-            bool result = cur_token.func(&(cur_token), s, pathname);
-            log.isValidExpression &= result;
+        if(has_valid_prerequisites(pathname, &cur_token, s, &log)){
+            log.isValidExpression &= cur_token.func(&(cur_token), s, pathname);
         } else {
             log.isValidExpression = false;
         }
@@ -360,7 +503,7 @@ walk_tree(char *pathname, int token_count, struct token token_list[], struct sta
         
             if (dr == NULL)  // opendir returns NULL if couldn't open directory
             {
-                printf("Could not open directory %s\n", pathname );
+                //printf("Could not open directory %s\n", pathname );
                 result = false;
             }
         
@@ -387,19 +530,11 @@ walk_tree(char *pathname, int token_count, struct token token_list[], struct sta
         }
     }
     else{
-        printf("cannot get stat for %s.\n", pathname);
+        //printf("cannot get stat for %s.\n", pathname);
         return false;
     }
 
     return result;
-}
-
-static void 
-print_help(){
-    printf("\nUSAGE\n\n");
-    printf("myfind [path] [expression]\n\n");
-    printf("ACTIONS: -print, -ls.\nActions do not take any argumants.\n\n");
-    printf("TESTS: -name <pattern>, -type <t>, -user <name|id>.\nTests are always followed by a single argument.\n\n");
 }
 
 char *
@@ -417,15 +552,10 @@ main (int argc, char* args[])
 {
     struct stat s;
 
-    if(argc == 1){
-        printf("find all in current dic and print\n");
-        return EXIT_SUCCESS;
-    }
-
     bool is_path = false;
     char *start_point = ".";
 
-    if(!is_known_command(1, args)){
+    if(argc > 1 && !is_known_command(1, args)){
         //TODO: check if arg is file or dict.
         if(stat (args[1], &s) == 0){
             if (is_dir_or_file(&s))
@@ -434,14 +564,12 @@ main (int argc, char* args[])
                 is_path = true;
             }
             else {
-                printf("start point must be a directory or a file.\n");
-                print_help();
+                printf("myfind: ‘%s’: No such file or directory\n", args[1]);
                 return EXIT_FAILURE;
             }
         }
         else{
-            printf("cannot get stat.\n");
-            print_help();
+            printf("myfind: unknown predicate `%s'\n", args[1]);
             return EXIT_FAILURE;
         }
     }
@@ -454,8 +582,7 @@ main (int argc, char* args[])
     for (int i = 1+is_path, j = 0; i < argc; i++, token_list_length++){
         cur_token = &(token_list[token_list_length]);
         if(!parse_command(&i, argc, args, &s, cur_token)){
-            printf("ERROR parsing arguments\n");
-            print_help();
+            printf("myfind: unknown predicate `%s'\n", args[i]);
             return EXIT_FAILURE;
         }
 
@@ -468,7 +595,7 @@ main (int argc, char* args[])
         {
             if(KNOWN_ARGS[i].type == Print){
                 if(!create_token(&i, i, argc, args, &s, cur_token)){
-                    printf("ERROR parsing arguments\n");
+                    printf("internal error\n");
                     print_help();
                     return EXIT_FAILURE;
                 } else {

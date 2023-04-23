@@ -196,6 +196,78 @@
                     "ignoreFailures": true
                 }
             ]
+        }, //-print -name *2* -ls
+        {
+            "name": "myfind_random",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/myfind/myfind",
+            "args": ["-print", "-name", "*02*", "-ls"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/myfind/test",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description":  "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "myfind_type_d",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/myfind/myfind",
+            "args": ["-type", "d"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/myfind/test",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description":  "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "myfind_type_f",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/myfind/myfind",
+            "args": ["-type", "f"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/myfind/test",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description":  "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
         },
     ]
 }
