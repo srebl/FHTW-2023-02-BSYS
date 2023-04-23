@@ -1,4 +1,4 @@
-//#define _GNU_SOURCE
+#define _GNU_SOURCE
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -11,6 +11,7 @@
 #include <pwd.h>
 #include <unistd.h>
 #include <time.h>
+#include <fnmatch.h>
 
 //defines
 #define TESTS_COUNT 3
@@ -40,6 +41,7 @@ enum token_type
 union token_args
 {
     char *str; //-name, 
+    unsigned int id; //uid, gid
 };
 
 struct token_prerequisites{
@@ -90,7 +92,7 @@ dummy_token_func(struct token *t_ptr, struct stat *s_ptr, const char *pathname){
 
 static bool
 dummy_token_fill(struct token *t_ptr, struct stat *s_ptr, int argi, char* args[], int *index){
-    printf("dummy_token_fill\n");
+    printf("dummy_token_func\n");
     return true;
 }
 
@@ -120,9 +122,23 @@ fill_user_token(struct token *token_ptr, struct stat *stat_ptr, int argi, char* 
 
     token_ptr->prerequisites = create_token_prerequisites();
 
+    if(password != NULL){
+        token_ptr->args.id = password->pw_uid;
+    }
+
     (*index)++;
     return password != NULL;
 }
+
+static bool
+token_user_func(struct token *token_ptr, struct stat *stat_ptr, const char *pathname){
+    if(token_ptr == NULL || stat_ptr == NULL){
+        return false;
+    }
+
+    return stat_ptr->st_uid == token_ptr->args.id;
+}
+
 
 static bool
 token_print_func(struct token *token_ptr, struct stat *stat_ptr, const char *pathname){
@@ -133,7 +149,7 @@ token_print_func(struct token *token_ptr, struct stat *stat_ptr, const char *pat
 static int 
 filetypeletter(int mode)
 {
-    char c;
+    char    c;
 
     if (S_ISREG(mode))
         c = '-';
@@ -168,36 +184,53 @@ filetypeletter(int mode)
     return(c);
 }
 
+//https://stackoverflow.com/questions/10323060/printing-file-permissions-like-ls-l-using-stat2-in-c
+/* Convert a mode field into "ls -l" type perms field. */
+static char *lsperms(int mode)
+{
+    static const char *rwx[] = {"---", "--x", "-w-", "-wx",
+    "r--", "r-x", "rw-", "rwx"};
+    static char bits[11];
+
+    bits[0] = filetypeletter(mode);
+    strcpy(&bits[1], rwx[(mode >> 6)& 7]);
+    strcpy(&bits[4], rwx[(mode >> 3)& 7]);
+    strcpy(&bits[7], rwx[(mode & 7)]);
+    if (mode & S_ISUID)
+        bits[3] = (mode & S_IXUSR) ? 's' : 'S';
+    if (mode & S_ISGID)
+        bits[6] = (mode & S_IXGRP) ? 's' : 'l';
+#if defined __USE_MISC || defined __USE_XOPEN
+    if (mode & S_ISVTX)
+        bits[9] = (mode & S_IXOTH) ? 't' : 'T';
+#endif
+    bits[10] = '\0';
+    return(bits);
+}
+
 static bool
 token_ls_func(struct token *token_ptr, struct stat *stat_ptr, const char *pathname){
     if(stat_ptr == NULL){
         return false;
     }
     
-    printf("%9d %6d ", stat_ptr->st_ino, stat_ptr->st_blocks);
-    printf( (S_ISDIR(stat_ptr->st_mode)) ? "d" : "-");
-    printf( (stat_ptr->st_mode & S_IRUSR) ? "r" : "-");
-    printf( (stat_ptr->st_mode & S_IWUSR) ? "w" : "-");
-    printf( (stat_ptr->st_mode & S_IXUSR) ? "x" : "-");
-    printf( (stat_ptr->st_mode & S_IRGRP) ? "r" : "-");
-    printf( (stat_ptr->st_mode & S_IWGRP) ? "w" : "-");
-    printf( (stat_ptr->st_mode & S_IXGRP) ? "x" : "-");
-    printf( (stat_ptr->st_mode & S_IROTH) ? "r" : "-");
-    printf( (stat_ptr->st_mode & S_IWOTH) ? "w" : "-");
-    printf( (stat_ptr->st_mode & S_IXOTH) ? "x" : "-");
-    printf("  %3d ", stat_ptr->st_nlink);
+    printf("%9d %6d ", stat_ptr->st_ino, (stat_ptr->st_blocks)/2);
+    char *protection_bits = lsperms(stat_ptr->st_mode);
+    printf("%s ", protection_bits);
+    printf("%5d ", stat_ptr->st_nlink);
 
     struct passwd *pw = NULL;
     printf("%s  ", (pw = getpwuid(stat_ptr->st_uid)) != NULL ? pw->pw_name : "");
     printf("%s ", (pw = getpwuid(stat_ptr->st_gid)) != NULL ? pw->pw_name : "");
 
     printf("%9d ", stat_ptr->st_size);
-    char buff[100];
-    strftime(buff, 100, "%b %d %H:%M", localtime(&(stat_ptr->st_mtime)));
+    char buff[15];
+    strftime(buff, 15, "%b %d %H:%M", localtime(&(stat_ptr->st_mtime)));
     printf(buff);
     printf(" %s", pathname);
 
     printf("\n");
+    return true;
 }
 
 static bool
@@ -206,13 +239,38 @@ fill_print_token(struct token *token_ptr, struct stat *stat_ptr, int argi, char*
     return true;
 }
 
+static bool
+fill_ls_token(struct token *token_ptr, struct stat *stat_ptr, int argi, char* args[], int *index){
+    token_ptr->prerequisites = create_token_prerequisites();
+    return true;
+}
+
+static bool
+fill_name_token(struct token *token_ptr, struct stat *stat_ptr, int argi, char* args[], int *index){
+    token_ptr->prerequisites = create_token_prerequisites();
+    token_ptr->args.str = args[(*index)+1];
+    (*index)++;
+    return true;
+}
+
+static bool
+token_name_func(struct token *token_ptr, struct stat *stat_ptr, const char *pathname){
+    if(token_ptr == NULL || pathname == NULL){
+        return false;
+    }
+    char *name = basename(pathname);
+    int result = fnmatch(token_ptr->args.str, name, 0);
+    return !result;
+};
+
+
 static const struct func_mapping KNOWN_ARGS[KNOWN_ARGS_COUNT]  = 
 {
-    { "-name", Name, dummy_token_func, dummy_token_fill},
+    { "-name", Name, token_name_func, fill_name_token},
     { "-type", Type, dummy_token_func, dummy_token_fill},
-    { "-user", User, dummy_token_func, fill_user_token},
+    { "-user", User, token_user_func, fill_user_token},
     { "-print", Print, token_print_func, fill_print_token},
-    { "-ls", Ls, token_ls_func, dummy_token_fill}
+    { "-ls", Ls, token_ls_func, fill_ls_token}
 };
 
 static bool

@@ -12,7 +12,7 @@
             "program": "${workspaceFolder}/build/myfind/myfind",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${fileDirname}",
+            "cwd": "${workspaceFolder}/myfind/test",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",
@@ -36,7 +36,7 @@
             "program": "${workspaceFolder}/build/myfind/myfind",
             "args": ["deine_mutter"],
             "stopAtEntry": false,
-            "cwd": "${fileDirname}",
+            "cwd": "${workspaceFolder}/myfind/test",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",
@@ -60,7 +60,7 @@
             "program": "${workspaceFolder}/build/myfind/myfind",
             "args": ["../"],
             "stopAtEntry": false,
-            "cwd": "${fileDirname}",
+            "cwd": "${workspaceFolder}/myfind/test",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",
@@ -78,13 +78,13 @@
             ]
         },
         {
-            "name": "myfind_user_valid_name",
+            "name": "myfind_user_name_student",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/myfind/myfind",
             "args": ["-user", "student"],
             "stopAtEntry": false,
-            "cwd": "${fileDirname}",
+            "cwd": "${workspaceFolder}/myfind/test",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",
@@ -102,13 +102,37 @@
             ]
         },
         {
-            "name": "myfind_user_valid_ID",
+            "name": "myfind_user_name_root",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/myfind/myfind",
-            "args": ["-user", "1000"],
+            "args": ["-user", "root", "-ls"],
             "stopAtEntry": false,
-            "cwd": "${fileDirname}",
+            "cwd": "${workspaceFolder}/myfind/test",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description":  "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "myfind_user_valid_ID_student",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/myfind/myfind",
+            "args": ["-user", "1000", "-ls"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/myfind/test",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",
@@ -132,7 +156,31 @@
             "program": "${workspaceFolder}/build/myfind/myfind",
             "args": ["..", "-ls"],
             "stopAtEntry": false,
-            "cwd": "${fileDirname}",
+            "cwd": "${workspaceFolder}/myfind/test",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description":  "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "myfind_name",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/myfind/myfind",
+            "args": ["..", "-name", "*02*"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/myfind/test",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",
