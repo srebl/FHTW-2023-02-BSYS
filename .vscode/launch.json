@@ -82,7 +82,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/myfind/myfind",
-            "args": ["../"],
+            "args": ["./dict_01_01"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/myfind/test",
             "environment": [],
@@ -226,7 +226,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/myfind/myfind",
-            "args": ["-print", "-name", "*02*", "-ls"],
+            "args": ["-print", "-name", "\"*02*\"", "-ls"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/myfind/test",
             "environment": [],
@@ -277,6 +277,30 @@
             "args": ["-type", "f"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/myfind/test",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description":  "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "mypopen",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/mypopen/mypopen",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/mypopen/test",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",

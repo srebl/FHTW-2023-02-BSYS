@@ -537,8 +537,8 @@ execute_tokens(char *pathname, int token_count, struct token token_list[], struc
 static bool
 walk_tree(char *pathname, int token_count, struct token token_list[], struct stat *s, int level){
     bool result = true;
-
-    if(stat (pathname, s) == 0){
+    
+    if(lstat (pathname, s) == 0){
         result &= execute_tokens(pathname, token_count, token_list, s);
 
         if(s->st_mode & __S_IFDIR){
@@ -593,7 +593,7 @@ main (int argc, char* args[])
     char *start_point = ".";
 
     if(argc > 1 && !is_known_command(1, args)){
-        //TODO: check if arg is file or dict.
+        
         if(stat (args[1], &s) == 0){
             if (is_dir_or_file(&s))
             {

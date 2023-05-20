@@ -6,4 +6,6 @@ include(CTest)
 
 add_subdirectory(myfind)
 
+add_subdirectory(mypopen)
+
 
