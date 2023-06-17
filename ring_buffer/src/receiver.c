@@ -34,7 +34,10 @@ int main(int argc, char *argv[])
 
         // printf("write char: %c at index %d\n",character, index);
 
-        putchar(character);
+        if(character != EOF)
+        {
+            putchar(character);
+        }
 
         index = ++index % size;
 

@@ -21,9 +21,6 @@ int main(int argc, char *argv[])
     do
     {
         character = getchar();
-        char c = (char)character;
-
-        printf("read char: %c at index %d\n",character, index);
 
         if(wait_write(&buffer) == FAILIURE)
         {
