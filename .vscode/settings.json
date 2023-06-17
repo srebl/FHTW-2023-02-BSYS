@@ -12,6 +12,8 @@
         "utility": "c",
         "stdbool.h": "c",
         "stdlib.h": "c",
-        "dirent.h": "c"
+        "dirent.h": "c",
+        "common.h": "c",
+        "errno.h": "c"
     }
 }

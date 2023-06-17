@@ -98,8 +98,6 @@ FILE *mypopen(const char *command, const char *type)
     }
 
     FILE *f_ptr = NULL;
-    char buf[1024];
-    int ret = 0;
 
     if(*type == 'r')
     {
@@ -112,6 +110,7 @@ FILE *mypopen(const char *command, const char *type)
         close(pipefd[0]);
     }
 
+    //save information into node
     current->f_ptr = f_ptr;
     current->pid = pid;
 
@@ -124,6 +123,7 @@ int mypclose(FILE *stream)
 {
     struct node *current, *prev = NULL;
 
+    //search for node with the same FILE
     current = list_head;
     while (current != NULL)
     {
@@ -136,13 +136,14 @@ int mypclose(FILE *stream)
         current = current->next_ptr;
     }
     
+    //never opened or already closed
     if(current == NULL)
     {
         return -1;
     }
 
+    //remove node and close FILE
     remove_node(current, prev);
-
     fclose(stream);
     
     int pstat = 0;
