@@ -18,9 +18,16 @@ int main(int argc, char *argv[])
     int character = EOF;
     size_t index = 0;
 
+    FILE *in = freopen(NULL, "rb", stdin);    
+    size_t read_size = 0;
     do
     {
-        character = getchar();
+        read_size = fread(&character, sizeof(unsigned char), 1, in);
+
+        if(read_size == 0)
+        {
+            character = EOF;
+        }
 
         if(wait_write(&buffer) == FAILIURE)
         {
@@ -34,9 +41,9 @@ int main(int argc, char *argv[])
             break;
         }
 
-        index = ++index % size;
+        index = (++index) % size;
 
-    } while (character != EOF);
+    } while (read_size != 0);
     
     if(destroy_ringbuffer_write(&buffer) == FAILIURE)
     {

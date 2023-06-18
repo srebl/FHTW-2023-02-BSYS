@@ -89,7 +89,7 @@ int initialize_ringbuffer(struct ring_buffer *self, size_t size)
         return FAILIURE;
     }
 
-    int memory = create_memory(MEMORY, self->size * sizeof(char *));
+    int memory = create_memory(MEMORY, self->size * sizeof(int));
 
     if(memory == FAILIURE)
     {
@@ -98,7 +98,7 @@ int initialize_ringbuffer(struct ring_buffer *self, size_t size)
         return FAILIURE;
     }
 
-    self->memory = attatch_memory(memory, self->size * sizeof(char *));
+    self->memory = attatch_memory(memory, self->size * sizeof(int));
 
     if(self->memory == NULL)
     {
@@ -113,8 +113,8 @@ int initialize_ringbuffer(struct ring_buffer *self, size_t size)
 int destroy_ringbuffer_read(struct ring_buffer *self)
 {
     int result = destroy_semaphore(SEMAPHORE_READ, self->sem_read);
-    result |= detatch_memory(self->memory, self->size * sizeof(char));
-    result |= destroy_memory(self->memory);
+    result |= detatch_memory(self->memory, self->size * sizeof(int));
+    result |= destroy_memory(MEMORY);
 
     return result == SUCCESS ? SUCCESS : FAILIURE;
 }
@@ -122,8 +122,8 @@ int destroy_ringbuffer_read(struct ring_buffer *self)
 int destroy_ringbuffer_write(struct ring_buffer *self)
 {
     int result = destroy_semaphore(SEMAPHORE_WRITE, self->sem_write);
-    result |= detatch_memory(self->memory, self->size * sizeof(char));
-    result |= destroy_memory(self->memory);
+    result |= detatch_memory(self->memory, self->size * sizeof(int));
+    result |= destroy_memory(MEMORY);
 
     return result == SUCCESS ? SUCCESS : FAILIURE;
 }

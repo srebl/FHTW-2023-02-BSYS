@@ -18,6 +18,8 @@ int main(int argc, char *argv[])
     int character = EOF;
     size_t index = 0;
 
+    FILE *out = freopen(NULL, "wb", stdout);    
+
     do
     {
         if(wait_read(&buffer) == FAILIURE)
@@ -32,18 +34,17 @@ int main(int argc, char *argv[])
             break;
         }
 
-        // printf("write char: %c at index %d\n",character, index);
-
         if(character != EOF)
         {
-            putchar(character);
+            unsigned char c = character;
+            fwrite(&c, sizeof(unsigned char), 1, out);
         }
 
-        index = ++index % size;
+        index = (++index) % size;
 
     } while (character != EOF);
     
-    if(destroy_ringbuffer_write(&buffer) == FAILIURE)
+    if(destroy_ringbuffer_read(&buffer) == FAILIURE)
     {
         exit(EXIT_FAILURE);
     }
