@@ -19,8 +19,8 @@ static sem_t * open_semaphore(const char *filename, size_t init_val);
 static int detatch_semaphore(const char *filename);
 static int destroy_semaphore(const char *filename, sem_t *sem);
 static int create_memory(const char* filename, size_t size);
-static char * attatch_memory(int memory, size_t size);
-static int detatch_memory(const char *memory, size_t size);
+static void * attatch_memory(int memory, size_t size);
+static int detatch_memory(void *memory_address, size_t size);
 static int destroy_memory(const char *filename);
 static int wait_semaphore(sem_t *sem);
 static int post_semaphore(sem_t *sem);
@@ -98,9 +98,9 @@ int initialize_ringbuffer(struct ring_buffer *self, size_t size)
         return FAILIURE;
     }
 
-    self->memory = attatch_memory(memory, self->size * sizeof(int));
+    self->memory_location = attatch_memory(memory, self->size * sizeof(int));
 
-    if(self->memory == NULL)
+    if(self->memory_location == NULL)
     {
         destroy_semaphore(SEMAPHORE_READ, self->sem_read);
         destroy_semaphore(SEMAPHORE_WRITE, self->sem_write);
@@ -113,7 +113,7 @@ int initialize_ringbuffer(struct ring_buffer *self, size_t size)
 int destroy_ringbuffer_read(struct ring_buffer *self)
 {
     int result = destroy_semaphore(SEMAPHORE_READ, self->sem_read);
-    result |= detatch_memory(self->memory, self->size * sizeof(int));
+    result |= detatch_memory(self->memory_location, self->size * sizeof(int));
     result |= destroy_memory(MEMORY);
 
     return result == SUCCESS ? SUCCESS : FAILIURE;
@@ -122,7 +122,7 @@ int destroy_ringbuffer_read(struct ring_buffer *self)
 int destroy_ringbuffer_write(struct ring_buffer *self)
 {
     int result = destroy_semaphore(SEMAPHORE_WRITE, self->sem_write);
-    result |= detatch_memory(self->memory, self->size * sizeof(int));
+    result |= detatch_memory(self->memory_location, self->size * sizeof(int));
     result |= destroy_memory(MEMORY);
 
     return result == SUCCESS ? SUCCESS : FAILIURE;
@@ -130,12 +130,12 @@ int destroy_ringbuffer_write(struct ring_buffer *self)
 
 void write_char(struct ring_buffer *self, size_t index, int character)
 {
-    self->memory[index] = character;
+    ((int*)self->memory_location)[index] = character;
 }
 
 int read_char(struct ring_buffer *self, size_t index)
 {
-    return self->memory[index];
+    return ((int*)self->memory_location)[index];
 }
 
 int wait_write(struct ring_buffer *self)
@@ -207,23 +207,8 @@ static sem_t * open_semaphore(const char *filename, size_t init_val)
 
     if(sem == SEM_FAILED)
     {
-        // if(sem_unlink(filename) == -1)
-        // {
-        //     fprintf(stderr, "failed to open semaphore\n");
-        //     return NULL;
-        // }
-
-        // sem = sem_open(filename, O_CREAT, S_IRWXU, init_val);
-
-        // if(sem == SEM_FAILED)
-        // {
-        //     fprintf(stderr, "failed to open semaphore\n");
-        //     return NULL;
-        // }
-
         fprintf(stderr, "failed to open semaphore\n");
         return NULL;
-
     }
 
     return sem;
@@ -276,9 +261,9 @@ static int create_memory(const char* filename, size_t size)
     return memory;
 }
 
-static char * attatch_memory(int memory, size_t size)
+static void * attatch_memory(int memory, size_t size)
 {
-    char *output = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, memory, 0);
+    void *output = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, memory, 0);
 
     if(output == MAP_FAILED)
     {
@@ -291,11 +276,9 @@ static char * attatch_memory(int memory, size_t size)
     return output;
 }
 
-static int detatch_memory(const char *memory, size_t size)
+static int detatch_memory(void *memory_address, size_t size)
 {
-    char path[strlen(memory)+1];
-    strcpy(path, memory);
-    if(munmap(path, size) == -1)
+    if(munmap(memory_address, size) == -1)
     {
         fprintf(stderr, "failed to detatch memory\n");
         return -1;

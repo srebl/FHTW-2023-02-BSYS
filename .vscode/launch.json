@@ -318,13 +318,13 @@
             ]
         },
         {
-            "name": "receiver",
+            "name": "receiver_lorem",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/ring_buffer/receiver",
-            "args": ["-m", "42", ">", "tmp.txt"],
+            "args": ["-m", "42", ">", "lorem_out.txt"],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
+            "cwd": "${workspaceFolder}/ring_buffer/test_files",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",
@@ -342,13 +342,13 @@
             ]
         },
         {
-            "name": "sender",
+            "name": "sender_lorem",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/ring_buffer/sender",
-            "args": ["loremipsum.txt", ">", "-m", "42"],
+            "args": ["-m", "42", "<", "loremipsum.txt"],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
+            "cwd": "${workspaceFolder}/ring_buffer/test_files",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",

@@ -10,7 +10,8 @@ struct ring_buffer
     size_t size;
     sem_t *sem_read;
     sem_t *sem_write;
-    char *memory;
+    int memory_address;
+    void *memory_location;
 };
 
 size_t parse_args(int argc, char *argv[]);
